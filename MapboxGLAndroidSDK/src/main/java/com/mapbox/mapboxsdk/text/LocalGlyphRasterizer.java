@@ -4,6 +4,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Bitmap;
+import android.graphics.Rect;
 import android.graphics.Typeface;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
@@ -15,6 +16,30 @@ import androidx.annotation.WorkerThread;
  */
 @Keep
 public class LocalGlyphRasterizer {
+
+  public class GlyphMetrics {
+    public int width;
+    public int height;
+    public int top;
+    public int left;
+    public int ascender;
+    public int descender;
+    public int advance;
+    public Bitmap glyphBitmap;
+
+    GlyphMetrics() {
+      this.glyphBitmap = Bitmap.createBitmap(35, 35, Bitmap.Config.ARGB_8888);
+      this.width = 0;
+      this.height = 0;
+      this.top = 0;
+      this.left = 0;
+      this.ascender = 0;
+      this.descender = 0;
+      this.advance = 0;
+    }
+  }
+  private final GlyphMetrics glyphMetrics;
+
   private final Bitmap bitmap;
   @NonNull
   private final Paint paint;
@@ -28,13 +53,13 @@ public class LocalGlyphRasterizer {
       of the bitmap (y: 20) with some buffer around the edge
     */
     bitmap = Bitmap.createBitmap(35, 35, Bitmap.Config.ARGB_8888);
-
+    glyphMetrics = this.new GlyphMetrics();
     paint = new Paint();
     paint.setAntiAlias(true);
     paint.setTextSize(24);
 
     canvas = new Canvas();
-    canvas.setBitmap(bitmap);
+    canvas.setBitmap(glyphMetrics.glyphBitmap);
   }
 
   /***
@@ -53,6 +78,30 @@ public class LocalGlyphRasterizer {
     paint.setTypeface(Typeface.create(fontFamily, bold ? Typeface.BOLD : Typeface.NORMAL));
     canvas.drawColor(Color.WHITE);
     canvas.drawText(String.valueOf(glyphID), 5, 25, paint);
-    return bitmap;
+    return glyphMetrics.glyphBitmap;
+  }
+
+  @WorkerThread
+  protected GlyphMetrics getGlyphMetrics(String fontFamily, boolean bold, char glyphID) {
+    paint.setTypeface(Typeface.create(fontFamily, bold ? Typeface.BOLD : Typeface.NORMAL));
+    canvas.drawColor(Color.WHITE);
+    canvas.drawText(String.valueOf(glyphID), 5, 25, paint);
+
+    Paint.FontMetricsInt metrics = paint.getFontMetricsInt();
+    glyphMetrics.ascender = Math.abs(metrics.ascent);
+    glyphMetrics.descender = Math.abs(metrics.descent);
+
+    Rect bounds = new Rect();
+    paint.getTextBounds(String.valueOf(glyphID), 0, 1, bounds);
+    glyphMetrics.left = bounds.left;
+    glyphMetrics.width = bounds.right - bounds.left;
+    glyphMetrics.height = bounds.bottom - bounds.top;
+    glyphMetrics.top = Math.abs(bounds.top) - glyphMetrics.ascender;
+    float width = paint.measureText(String.valueOf(glyphID), 0, 1);
+    glyphMetrics.advance = Math.round(width);
+//    glyphMetrics.glyphBitmap = bitmap;
+//    Bitmap emptyBitmap = Bitmap.createBitmap(35, 35, Bitmap.Config.ARGB_8888);
+
+    return glyphMetrics;
   }
 }
